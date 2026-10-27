@@ -104,3 +104,4 @@ Temporary Items
 .ionide
 
 build/
+.cache/
