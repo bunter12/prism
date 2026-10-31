@@ -12,7 +12,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(prism src/main.cpp src/cli.cpp)
+add_executable(prism src/main.cpp src/cli.cpp
+    src/core/mapped_file.cpp)
 
 target_include_directories(prism PRIVATE
     include
