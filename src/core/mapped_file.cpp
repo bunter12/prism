@@ -1,10 +1,9 @@
-#include "mapped_file.hpp"
+#include "core/mapped_file.hpp"
 #include <fcntl.h>
 #include <system_error>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include <iostream>
 
 namespace prism::core{
     MappedFile::MappedFile(const std::filesystem::path& path) {
