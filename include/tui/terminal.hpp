@@ -17,9 +17,14 @@ public:
     void set_echo(bool enable);
     void set_signals(bool enable);
 private:
+    static void restore_terminal() noexcept;
+    static void signal_handler(int signum); 
+    void setup_signals();
     void apply_changes();
 
     struct termios orig_termios_{};
     struct termios curr_termios_{};
+
+    static inline RawModeGuard* active_instance_ = nullptr;
 };
 } // namespace prism::tui

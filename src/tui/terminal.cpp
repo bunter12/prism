@@ -1,32 +1,37 @@
 #include "tui/terminal.hpp"
+#include <csignal>
+#include <signal.h>
 #include <system_error>
+#include <unistd.h>
+#include <cstdlib>
 namespace prism::tui{
 
-RawModeGuard::RawModeGuard(){
+RawModeGuard::RawModeGuard() {
     if (!isatty(STDIN_FILENO)) {
-        throw std::system_error(errno, std::generic_category(), "Standart input is not a TTY");
+        throw std::system_error(errno, std::generic_category(), "Standard input is not a TTY");
     }
 
     if (tcgetattr(STDIN_FILENO, &orig_termios_) == -1) {
-        throw std::system_error(errno, std::generic_category(), "Failed to get terminal attibutes");
+        throw std::system_error(errno, std::generic_category(), "Failed to get terminal attributes");
     }
 
     curr_termios_ = orig_termios_;
 
-    curr_termios_.c_lflag &= ~(ICANON | ECHO | IEXTEN);
     curr_termios_.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-    // curr_termios.c_oflag &= ~(OPOST);
+    curr_termios_.c_lflag &= ~(ICANON | ECHO | IEXTEN);
+    curr_termios_.c_lflag |= ISIG;
 
     curr_termios_.c_cc[VMIN] = 1;
     curr_termios_.c_cc[VTIME] = 0;
 
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &curr_termios_) == -1) {
-        throw std::system_error(errno, std::generic_category(), "Failed to set terminal to raw mode");
-    }
+    apply_changes();
+
+    setup_signals();
 }
 
-RawModeGuard::~RawModeGuard(){
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios_);
+RawModeGuard::~RawModeGuard() {
+    restore_terminal();
+    active_instance_ = nullptr;
 }
 
 void RawModeGuard::set_echo(bool enable) {
@@ -42,4 +47,39 @@ void RawModeGuard::apply_changes() {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &curr_termios_);
 }
 
+void RawModeGuard::set_signals(bool enable) {
+    if (enable) {
+        curr_termios_.c_lflag |= ISIG;
+    } else {
+        curr_termios_.c_lflag &= ~ISIG;
+    }
+    apply_changes();
+}
+
+void RawModeGuard::setup_signals() {
+    active_instance_ = this;
+    std::atexit(restore_terminal);
+
+    struct sigaction sa{};
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    ::sigaction(SIGINT,  &sa, nullptr);
+    ::sigaction(SIGTERM, &sa, nullptr);
+    ::sigaction(SIGQUIT, &sa, nullptr);
+    ::sigaction(SIGHUP,  &sa, nullptr);
+}
+
+void RawModeGuard::restore_terminal() noexcept {
+    if (active_instance_ != nullptr) {
+        ::tcsetattr(STDIN_FILENO, TCSAFLUSH, &active_instance_->orig_termios_);
+    }
+}
+
+void RawModeGuard::signal_handler(int signum) {
+    restore_terminal();
+    ::signal(signum, SIG_DFL);
+    ::raise(signum);
+}
 } // namespace prism::tui

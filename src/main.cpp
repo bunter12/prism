@@ -1,11 +1,15 @@
 #include <iostream>
 #include "cli.hpp"
 #include "core/mapped_file.hpp"
+#include "tui/terminal.hpp"
 #include <system_error>
 
 int main(int argc, char* argv[]) {
     prism::cli::Options options = prism::cli::parse(argc, argv);
 
+    prism::tui::RawModeGuard tui{};
+
+    
     switch (options.action) {
         case prism::cli::Action::PrintHelp:
             prism::cli::print_help(argv[0]);
@@ -19,12 +23,12 @@ int main(int argc, char* argv[]) {
 
                 prism::core::MappedFile file(options.file_path);
 
-                std::cout << "Successfully mapped! Size: " << file.size() << " bytes" << "\n";
-
                 if (file.empty()){
                     std::cout << "File is empty" << "\n";
                     return 0;
                 }
+   
+                std::cout << "Successfully mapped! Size: " << file.size() << " bytes" << "\n";
 
                 auto bytes = file.span();
 
