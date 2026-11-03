@@ -2,6 +2,7 @@
 #include "cli.hpp"
 #include "core/mapped_file.hpp"
 #include "tui/terminal.hpp"
+#include "tui/keyboard.hpp"
 #include <system_error>
 
 int main(int argc, char* argv[]) {
@@ -18,50 +19,51 @@ int main(int argc, char* argv[]) {
             prism::cli::print_version();
             return 0;
         case prism::cli::Action::Run:
-            try{
-                std::cout << "Opening file: " << options.file_path << "\n";
-
+            try {
                 prism::core::MappedFile file(options.file_path);
 
-                if (file.empty()){
-                    std::cout << "File is empty" << "\n";
-                    return 0;
-                }
-   
-                std::cout << "Successfully mapped! Size: " << file.size() << " bytes" << "\n";
+                std::cout << "Opened: " << options.file_path << " (" << file.size() << " bytes)\r\n";
+                std::cout << "Use [j / Down] to scroll down, [k / Up] to scroll up, [q] to exit.\r\n";
 
-                auto bytes = file.span();
+                {
+                    prism::tui::RawModeGuard guard;
 
-                std::cout << "First 16 bytes: ";
-                size_t preview_len = std::min(bytes.size(), static_cast<size_t>(16));
-                for (size_t i = 0; i < preview_len; ++i) {
-                    std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bytes[i]) << " ";
-                }
-                std::cout << std::dec << "\n";
-                break;
-            } catch (const std::system_error& e) {
-                const auto code = e.code();
+                    int current_line = 0;
 
-                if (code == std::errc::permission_denied) {
-                    std::cerr << "Error: Permission denied. You do not have read access to '" 
-                              << options.file_path.string() << "'.\n";
-                } 
-                else if (code == std::errc::no_such_file_or_directory) {
-                    std::cerr << "Error: File not found: '" 
-                              << options.file_path.string() << "'.\n";
-                } 
-                else if (code == std::errc::is_a_directory) {
-                    std::cerr << "Error: '" << options.file_path.string() 
-                              << "' is a directory, not a regular file.\n";
-                } 
-                else {
-                    std::cerr << "System Error: " << e.what() << "\n";
+                    while (true) {
+                        auto event = prism::tui::read_key();
+
+                        if (event.is_char('q')) {
+                            std::cout << "\r\nExiting...\r\n";
+                            break;
+                        }
+
+                        if (event.key == prism::tui::Key::ArrowDown || event.is_char('j')) {
+                            ++current_line;
+                            std::cout << "Scroll DOWN -> Line: " << current_line << "\r\n";
+                        }
+                        else if (event.key == prism::tui::Key::ArrowUp || event.is_char('k')) {
+                            if (current_line > 0) --current_line;
+                            std::cout << "Scroll UP   -> Line: " << current_line << "\r\n";
+                        }
+                        else if (event.key == prism::tui::Key::PageDown) {
+                            current_line += 10;
+                            std::cout << "PAGE DOWN   -> Line: " << current_line << "\r\n";
+                        }
+                        else if (event.key == prism::tui::Key::PageUp) {
+                            current_line = (current_line >= 10) ? current_line - 10 : 0;
+                            std::cout << "PAGE UP     -> Line: " << current_line << "\r\n";
+                        }
+                    }
                 }
-                return 1;
+
+                std::cout << "Terminal successfully restored.\n";
+
             } catch (const std::exception& e) {
-                std::cerr << "Fatal Error: " << e.what() << "\n";
+                std::cerr << "Error: " << e.what() << "\n";
                 return 1;
             }
+            break;
         case prism::cli::Action::Error:
             std::cerr << "Error: " << options.error_message << "\n";
             return 1;
