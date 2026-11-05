@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <utility>
 
 namespace prism::core{
     MappedFile::MappedFile(const std::filesystem::path& path) {
