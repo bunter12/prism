@@ -1,70 +1,91 @@
-#include <iostream>
 #include "cli.hpp"
 #include "core/mapped_file.hpp"
-#include "tui/terminal.hpp"
-#include "tui/keyboard.hpp"
-#include <system_error>
+#include "tui/tui_include.hpp"
+#include <iostream>
+#include <algorithm>
 
 int main(int argc, char* argv[]) {
-    prism::cli::Options options = prism::cli::parse(argc, argv);
+    auto options = prism::cli::parse(argc, argv);
 
     switch (options.action) {
         case prism::cli::Action::PrintHelp:
             prism::cli::print_help(argv[0]);
             return 0;
+
         case prism::cli::Action::PrintVersion:
             prism::cli::print_version();
             return 0;
+
+        case prism::cli::Action::Error:
+            std::cerr << "Error: " << options.error_message << "\n\n";
+            prism::cli::print_help(argv[0]);
+            return 1;
+
         case prism::cli::Action::Run:
             try {
-                prism::tui::RawModeGuard tui{};
                 prism::core::MappedFile file(options.file_path);
 
-                std::cout << "Opened: " << options.file_path << " (" << file.size() << " bytes)\r\n";
-                std::cout << "Use [j / Down] to scroll down, [k / Up] to scroll up, [q] to exit.\r\n";
-
-                {
-                    prism::tui::RawModeGuard guard;
-
-                    int current_line = 0;
-
-                    while (true) {
-                        auto event = prism::tui::read_key();
-
-                        if (event.is_char('q')) {
-                            std::cout << "\r\nExiting...\r\n";
-                            break;
-                        }
-
-                        if (event.key == prism::tui::Key::ArrowDown || event.is_char('j')) {
-                            ++current_line;
-                            std::cout << "Scroll DOWN -> Line: " << current_line << "\r\n";
-                        }
-                        else if (event.key == prism::tui::Key::ArrowUp || event.is_char('k')) {
-                            if (current_line > 0) --current_line;
-                            std::cout << "Scroll UP   -> Line: " << current_line << "\r\n";
-                        }
-                        else if (event.key == prism::tui::Key::PageDown) {
-                            current_line += 10;
-                            std::cout << "PAGE DOWN   -> Line: " << current_line << "\r\n";
-                        }
-                        else if (event.key == prism::tui::Key::PageUp) {
-                            current_line = (current_line >= 10) ? current_line - 10 : 0;
-                            std::cout << "PAGE UP     -> Line: " << current_line << "\r\n";
-                        }
-                    }
+                if (file.empty()) {
+                    std::cout << "[File is completely empty]\n";
+                    return 0;
                 }
 
-                std::cout << "Terminal successfully restored.\n";
+                prism::tui::RawModeGuard guard;
+
+                prism::tui::TextPager pager(file.span());
+                pager.enter_alternate_screen();
+
+                size_t top_line = 0;
+                std::string file_display_name = options.file_path.filename().string();
+
+                pager.render(top_line, file_display_name);
+
+                while (true) {
+                    auto event = prism::tui::read_key();
+                    auto term_size = prism::tui::get_terminal_size();
+                    size_t content_rows = (term_size.rows > 1) ? term_size.rows - 1 : 1;
+                    size_t max_top = pager.max_top_line(content_rows);
+
+                    if (event.is_char('q') || event.key == prism::tui::Key::Escape) {
+                        break;
+                    }
+
+                    if (event.is_char('j') || event.key == prism::tui::Key::ArrowDown) {
+                        if (top_line < max_top) {
+                            ++top_line;
+                            pager.render(top_line, file_display_name);
+                        }
+                    }
+                    else if (event.is_char('k') || event.key == prism::tui::Key::ArrowUp) {
+                        if (top_line > 0) {
+                            --top_line;
+                            pager.render(top_line, file_display_name);
+                        }
+                    }
+                    else if (event.key == prism::tui::Key::PageDown || event.is_char(' ')) {
+                        top_line = std::min(top_line + content_rows, max_top);
+                        pager.render(top_line, file_display_name);
+                    }
+                    else if (event.key == prism::tui::Key::PageUp) {
+                        top_line = (top_line > content_rows) ? top_line - content_rows : 0;
+                        pager.render(top_line, file_display_name);
+                    }
+                    else if (event.is_char('g') || event.key == prism::tui::Key::Home) {
+                        top_line = 0;
+                        pager.render(top_line, file_display_name);
+                    }
+                    else if (event.is_char('G') || event.key == prism::tui::Key::End) {
+                        top_line = max_top;
+                        pager.render(top_line, file_display_name);
+                    }
+                }
+                pager.leave_alternate_screen();
 
             } catch (const std::exception& e) {
                 std::cerr << "Error: " << e.what() << "\n";
                 return 1;
             }
             break;
-        case prism::cli::Action::Error:
-            std::cerr << "Error: " << options.error_message << "\n";
-            return 1;
     }
 
     return 0;
