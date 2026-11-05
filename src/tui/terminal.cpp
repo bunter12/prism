@@ -72,6 +72,9 @@ void RawModeGuard::setup_signals() {
 }
 
 void RawModeGuard::restore_terminal() noexcept {
+    const char cleanup_cmd[] = "\033[?25h\033[?1049l";
+    ::write(STDOUT_FILENO, cleanup_cmd, sizeof(cleanup_cmd) - 1);
+    
     if (active_instance_ != nullptr) {
         ::tcsetattr(STDIN_FILENO, TCSAFLUSH, &active_instance_->orig_termios_);
     }
