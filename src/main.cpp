@@ -8,9 +8,6 @@
 int main(int argc, char* argv[]) {
     prism::cli::Options options = prism::cli::parse(argc, argv);
 
-    prism::tui::RawModeGuard tui{};
-
-    
     switch (options.action) {
         case prism::cli::Action::PrintHelp:
             prism::cli::print_help(argv[0]);
@@ -20,6 +17,7 @@ int main(int argc, char* argv[]) {
             return 0;
         case prism::cli::Action::Run:
             try {
+                prism::tui::RawModeGuard tui{};
                 prism::core::MappedFile file(options.file_path);
 
                 std::cout << "Opened: " << options.file_path << " (" << file.size() << " bytes)\r\n";
