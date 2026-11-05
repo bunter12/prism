@@ -5,6 +5,25 @@
 #include <format>
 namespace prism::tui {
 
+namespace {
+
+std::string format_size(size_t bytes) {
+    constexpr double kib = 1024.0;
+    constexpr double mib = 1024.0 * 1024.0;
+    constexpr double gib = 1024.0 * 1024.0 * 1024.0;
+
+    if (bytes < 1024) {
+        return std::format("{} B", bytes);
+    } else if (bytes < 1024 * 1024) {
+        return std::format("{:.1f} KB", static_cast<double>(bytes) / kib);
+    } else if (bytes < 1024 * 1024 * 1024) {
+        return std::format("{:.1f} MB", static_cast<double>(bytes) / mib);
+    } else {
+        return std::format("{:.2f} GB", static_cast<double>(bytes) / gib);
+    }
+}
+} // namespace
+
 TerminalSize get_terminal_size() noexcept {
     struct winsize ws{};
     if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_row > 0 && ws.ws_col > 0) {
@@ -96,14 +115,16 @@ void TextPager::render(size_t top_line, std::string_view file_name) {
         size_t percent = (total > 0) ? (bottom_line * 100) / total : 100;
         bool is_end = (bottom_line >= total && top_line > 0);
         std::string status = std::format(
-            " {} | Lines {}-{}/{} ({}%){} | Press 'q' to exit", 
+            " {} ({}) | Lines {}-{}/{} ({}%){} | Press 'q' to exit", 
             file_name.empty() ? "prism" : file_name,
+            format_size(data_.size()), // <- НАШ РАЗМЕР ФАЙЛА
             top_line + 1, 
             bottom_line,
             total,
             percent,
             is_end ? " [END]" : ""
         );
+
 
         if (status.size() >= cols) {
             status = status.substr(0, cols > 0 ? cols - 1 : 0);
