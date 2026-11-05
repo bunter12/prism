@@ -36,9 +36,10 @@ int main(int argc, char* argv[]) {
                 pager.enter_alternate_screen();
 
                 size_t top_line = 0;
+                size_t left_col = 0;
                 std::string file_display_name = options.file_path.filename().string();
 
-                pager.render(top_line, file_display_name);
+                pager.render(top_line, left_col, file_display_name);
 
                 while (true) {
                     auto event = prism::tui::read_key();
@@ -46,6 +47,15 @@ int main(int argc, char* argv[]) {
                     size_t content_rows = (term_size.rows > 1) ? term_size.rows - 1 : 1;
                     size_t max_top = pager.max_top_line(content_rows);
 
+                    if (event.key == prism::tui::Key::Resize) {
+                        top_line = std::min(top_line, max_top);
+                        size_t max_col = pager.max_left_col(term_size.cols);
+                        left_col = std::min(left_col, max_col);
+
+                        pager.render(top_line, left_col, file_display_name);
+                        continue;
+                    }
+                    
                     if (event.is_char('q') || event.key == prism::tui::Key::Escape) {
                         break;
                     }
@@ -53,30 +63,41 @@ int main(int argc, char* argv[]) {
                     if (event.is_char('j') || event.key == prism::tui::Key::ArrowDown) {
                         if (top_line < max_top) {
                             ++top_line;
-                            pager.render(top_line, file_display_name);
+                            pager.render(top_line, left_col, file_display_name);
                         }
                     }
                     else if (event.is_char('k') || event.key == prism::tui::Key::ArrowUp) {
                         if (top_line > 0) {
                             --top_line;
-                            pager.render(top_line, file_display_name);
+                            pager.render(top_line, left_col, file_display_name);
                         }
+                    }
+                    else if (event.is_char('l') || event.key == prism::tui::Key::ArrowRight) {
+                        size_t max_col = pager.max_left_col(term_size.cols);
+                        if (left_col < max_col) {
+                            left_col = std::min(left_col + 8, max_col); // Не уходим дальше max_col
+                            pager.render(top_line, left_col, file_display_name);
+                        }
+                    }
+                    else if (event.is_char('h') || event.key == prism::tui::Key::ArrowLeft) {
+                        left_col = (left_col >= 8) ? left_col - 8 : 0;
+                        pager.render(top_line, left_col, file_display_name);
                     }
                     else if (event.key == prism::tui::Key::PageDown || event.is_char(' ')) {
                         top_line = std::min(top_line + content_rows, max_top);
-                        pager.render(top_line, file_display_name);
+                        pager.render(top_line, left_col, file_display_name);
                     }
                     else if (event.key == prism::tui::Key::PageUp) {
                         top_line = (top_line > content_rows) ? top_line - content_rows : 0;
-                        pager.render(top_line, file_display_name);
+                        pager.render(top_line, left_col, file_display_name);
                     }
                     else if (event.is_char('g') || event.key == prism::tui::Key::Home) {
                         top_line = 0;
-                        pager.render(top_line, file_display_name);
+                        pager.render(top_line, left_col, file_display_name);
                     }
                     else if (event.is_char('G') || event.key == prism::tui::Key::End) {
                         top_line = max_top;
-                        pager.render(top_line, file_display_name);
+                        pager.render(top_line, left_col, file_display_name);
                     }
                 }
                 pager.leave_alternate_screen();

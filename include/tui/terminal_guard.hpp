@@ -14,6 +14,8 @@ public:
     RawModeGuard(RawModeGuard&&) noexcept = default;
     RawModeGuard& operator=(RawModeGuard&&) noexcept = default;
 
+    [[nodiscard]] static bool check_and_reset_resize() noexcept;
+
     void set_echo(bool enable);
     void set_signals(bool enable);
 private:

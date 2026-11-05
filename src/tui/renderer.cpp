@@ -38,15 +38,25 @@ TextPager::TextPager(const std::span<const uint8_t> data) : data_(data) {
 
 void TextPager::build_line_index() {
     line_offsets_.clear();
-
+    max_line_len_ = 0;
     if (data_.empty()) return;
 
     line_offsets_.push_back(0); 
 
+    size_t line_start = 0;
     for (size_t i = 0; i < data_.size(); ++i) {
         if (data_[i] == '\n') {
-            line_offsets_.push_back(i + 1);
+            size_t len = (i > line_start && data_[i - 1] == '\r') ? (i - 1 - line_start) : (i - line_start);
+            max_line_len_ = std::max(max_line_len_, len);
+
+            if ((i + 1) < data_.size()) {
+                line_offsets_.push_back(i + 1);
+                line_start = i + 1;
+            }
         }
+    }
+    if (line_start < data_.size()) {
+        max_line_len_ = std::max(max_line_len_, data_.size() - line_start);
     }
 }
 
@@ -71,6 +81,13 @@ size_t TextPager::max_top_line([[maybe_unused]] size_t screen_rows) const noexce
     return line_offsets_.size() - 1;
 }
 
+size_t TextPager::max_left_col(size_t screen_cols) const noexcept {
+    if (max_line_len_ <= screen_cols) {
+        return 0;
+    }
+    return max_line_len_ - screen_cols + 2;
+}
+
 void TextPager::enter_alternate_screen() {
     const std::string_view cmd = "\033[?1049h\033[?25l";
     ::write(STDOUT_FILENO, cmd.data(), cmd.size());
@@ -81,7 +98,7 @@ void TextPager::leave_alternate_screen() {
     ::write(STDOUT_FILENO, cmd.data(), cmd.size());
 }
 
-void TextPager::render(size_t top_line, std::string_view file_name) {
+void TextPager::render(size_t top_line, size_t left_col, std::string_view file_name) {
     auto [rows, cols] = get_terminal_size();
     if (rows == 0 || cols == 0) return;
 
@@ -96,35 +113,46 @@ void TextPager::render(size_t top_line, std::string_view file_name) {
         size_t current_line_idx = top_line + i;
         if (current_line_idx < line_offsets_.size()) {
             std::string_view line = get_line(current_line_idx);
-            if (line.size() > cols) {
-                line = line.substr(0, cols);
+            if (left_col < line.size()) {
+                line = line.substr(left_col);
+                if (line.size() > cols) {
+                    line = line.substr(0, cols);
+                }
+                frame.append(line);
             }
-            frame.append(line);
         } else {
             frame += "~";
         }
+
         frame += "\033[K";
     }
-
     if (rows > 1) {
         frame += std::format("\033[{};1H", rows);
 
         size_t total = line_offsets_.size();
         size_t bottom_line = std::min(top_line + content_rows, total);
-
         size_t percent = (total > 0) ? (bottom_line * 100) / total : 100;
         bool is_end = (bottom_line >= total && top_line > 0);
-        std::string status = std::format(
-            " {} ({}) | Lines {}-{}/{} ({}%){} | Press 'q' to exit", 
-            file_name.empty() ? "prism" : file_name,
-            format_size(data_.size()), // <- НАШ РАЗМЕР ФАЙЛА
-            top_line + 1, 
-            bottom_line,
-            total,
-            percent,
-            is_end ? " [END]" : ""
-        );
 
+        std::string name = file_name.empty() ? "prism" : std::string(file_name);
+        std::string col_info = (left_col > 0) ? std::format(" [C:{}]", left_col + 1) : "";
+        std::string end_tag = is_end ? " [END]" : "";
+
+        std::string status;
+
+        if (cols >= 75) {
+            status = std::format(
+                " {} ({}) | Lines {}-{}/{}{} ({}%){} | Press 'q' to exit",
+                name, format_size(data_.size()), top_line + 1, bottom_line, total, col_info, percent, end_tag
+            );
+        } else if (cols >= 45) {
+            status = std::format(
+                " {} ({}) | L {}-{}/{}{} ({}%){}",
+                name, format_size(data_.size()), top_line + 1, bottom_line, total, col_info, percent, end_tag
+            );
+        } else {
+            status = std::format(" {} | {}%{}", name, percent, end_tag);
+        }
 
         if (status.size() >= cols) {
             status = status.substr(0, cols > 0 ? cols - 1 : 0);
@@ -135,6 +163,7 @@ void TextPager::render(size_t top_line, std::string_view file_name) {
         frame += "\033[K";
         frame += "\033[0m";
     }
+
     ::write(STDOUT_FILENO, frame.data(), frame.size());
 }
 } // namespace prism::tui

@@ -1,10 +1,20 @@
-#include "tui/terminal.hpp"
+#include "tui/terminal_guard.hpp"
 #include <csignal>
 #include <signal.h>
 #include <system_error>
 #include <unistd.h>
 #include <cstdlib>
 namespace prism::tui{
+
+namespace {
+
+volatile std::sig_atomic_t g_window_resized = 0;
+
+void winresize_handler(int) {
+    g_window_resized = 1;
+}
+
+} // namespace
 
 RawModeGuard::RawModeGuard() {
     if (!isatty(STDIN_FILENO)) {
@@ -69,12 +79,18 @@ void RawModeGuard::setup_signals() {
     ::sigaction(SIGTERM, &sa, nullptr);
     ::sigaction(SIGQUIT, &sa, nullptr);
     ::sigaction(SIGHUP,  &sa, nullptr);
+
+    struct sigaction sa_win{};
+    sa_win.sa_handler = winresize_handler;
+    sigemptyset(&sa_win.sa_mask);
+    sa_win.sa_flags = 0;
+    ::sigaction(SIGWINCH, &sa_win, nullptr);
 }
 
 void RawModeGuard::restore_terminal() noexcept {
     const char cleanup_cmd[] = "\033[?25h\033[?1049l";
     ::write(STDOUT_FILENO, cleanup_cmd, sizeof(cleanup_cmd) - 1);
-    
+
     if (active_instance_ != nullptr) {
         ::tcsetattr(STDIN_FILENO, TCSAFLUSH, &active_instance_->orig_termios_);
     }
@@ -85,4 +101,13 @@ void RawModeGuard::signal_handler(int signum) {
     ::signal(signum, SIG_DFL);
     ::raise(signum);
 }
+
+bool RawModeGuard::check_and_reset_resize() noexcept {
+    if (g_window_resized != 0) {
+        g_window_resized = 0;
+        return true;
+    }
+    return false;
+}
+
 } // namespace prism::tui

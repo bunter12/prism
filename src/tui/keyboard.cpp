@@ -1,6 +1,8 @@
 #include "tui/keyboard.hpp"
 #include <poll.h>
 #include <unistd.h>
+#include "tui/terminal_guard.hpp"
+#include <cerrno>
 
 namespace prism::tui {
 
@@ -16,10 +18,18 @@ bool has_pending_input(int timeout_ms) {
 } //namespace
 
 KeyEvent read_key() {
+    if (RawModeGuard::check_and_reset_resize()) {
+        return {Key::Resize, '\0'};
+    }
+
     char c{'\0'};
-    
-    if (::read(STDIN_FILENO, &c, 1) <= 0) {
-        return KeyEvent{Key::None, '\0'};
+    ssize_t n = ::read(STDIN_FILENO, &c, 1);
+
+    if (n <= 0) {
+        if (errno == EINTR && RawModeGuard::check_and_reset_resize()) {
+            return {Key::Resize, '\0'};
+        }
+        return {Key::None, '\0'};
     }
 
     if (c == '\x1b') {

@@ -14,7 +14,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(prism src/main.cpp src/cli.cpp
     src/core/mapped_file.cpp
-    src/tui/terminal.cpp
+    src/tui/terminal_guard.cpp
     src/tui/keyboard.cpp
     src/tui/renderer.cpp)
 

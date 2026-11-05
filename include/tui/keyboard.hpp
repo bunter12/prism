@@ -1,5 +1,4 @@
 #pragma once
-#include <cstdint>
 
 namespace prism::tui {
 
@@ -19,7 +18,9 @@ enum class Key : int {
 
     Enter,
     Backspace,
-    Escape
+    Escape,
+
+    Resize
 };
 
 struct KeyEvent {
