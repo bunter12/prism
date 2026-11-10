@@ -1,4 +1,5 @@
 #include "formats/detector.hpp"
+#include <cstring>
 
 namespace prism::formats {
 
