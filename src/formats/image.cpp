@@ -1,6 +1,7 @@
 #include "formats/image.hpp"
 #include <optional>
 #include <format>
+#include <cstring> 
 
 namespace prism::formats {
 
@@ -25,7 +26,7 @@ std::optional<ImageInfo> parse_png(std::span<const uint8_t> data) noexcept {
         return std::nullopt;
     }
 
-    if (std::memcmp(data.data() + 12, "IHDR", 4) != 0) {
+    if (::memcmp(data.data() + 12, "IHDR", 4) != 0) {
         return std::nullopt;
     }
     

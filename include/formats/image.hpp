@@ -3,6 +3,7 @@
 #include <optional>
 #include <span>
 #include "formats/detector.hpp"
+#include <string>
 
 namespace prism::formats{
 
