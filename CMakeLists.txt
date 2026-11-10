@@ -16,7 +16,9 @@ add_executable(prism src/main.cpp src/cli.cpp
     src/core/mapped_file.cpp
     src/tui/terminal_guard.cpp
     src/tui/keyboard.cpp
-    src/tui/renderer.cpp)
+    src/tui/renderer.cpp
+    src/formats/detector.cpp
+    src/formats/image.cpp)
 
 target_include_directories(prism PRIVATE
     include
